@@ -49,7 +49,7 @@ export default class {
       }
     })
   )
-  deltempRootPath = () => app.whenReady()
+  cleartempRootPath = () => app.whenReady()
     .then(() => this.rimraf())
   webpack = (
     ...webpackOpt: webpack.Configuration[]

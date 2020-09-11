@@ -1,6 +1,5 @@
 // import path from 'path';
 // import webpack from 'webpack'
-// import env from './base/db/env'
 // import rimraf from 'rimraf'
 // import { merge } from 'webpack-merge'
 // import builder from 'electron-builder'
