@@ -29,13 +29,6 @@ var default_1 = (function () {
                                     test: /\.(js|ts)$/,
                                     exclude: /node_modules/,
                                     loader: 'babel-loader',
-                                    options: {
-                                        presets: ["@babel/preset-typescript"],
-                                        plugins: [
-                                            ["@babel/plugin-proposal-class-properties", { "loose": true }],
-                                        ],
-                                        cacheDirectory: true,
-                                    },
                                 }
                             ],
                         },

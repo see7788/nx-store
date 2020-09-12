@@ -2,6 +2,8 @@ import path from 'path'
 import fs from 'fs'
 import webpack from 'webpack'
 import { build } from 'electron-builder'
+// "@babel/core": "^7.0.0",
+// "babel-loader": "^8.1.0",
 // import rimraf from 'rimraf';
 // import CopyWebpackPlugin from 'copy-webpack-plugin'
 interface PackjsonOpt {
@@ -46,13 +48,13 @@ export default class {
                             test: /\.(js|ts)$/,
                             exclude: /node_modules/,
                             loader: 'babel-loader',
-                            options: {
-                                presets: ["@babel/preset-typescript"],
-                                plugins: [
-                                    ["@babel/plugin-proposal-class-properties", { "loose": true }],
-                                ],
-                                cacheDirectory: true,
-                            },
+                            // options: {
+                            //     presets: ["@babel/preset-typescript"],
+                            //     plugins: [
+                            //         ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                            //     ],
+                            //     cacheDirectory: true,
+                            // },
                         }
                     ],
                 },
