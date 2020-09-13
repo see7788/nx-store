@@ -1,21 +1,41 @@
 {
-    "name": "electron-rootstore",
-    "version": "1.0.0",
+    "name": "nx_pack",
+    "version": "1.0.1",
     "description": "tel13520521413",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "start": "tsc",
-        "end": "tsc && yarn unlink",
-        "release": "tsc && yarn run publish"
+        "start": "tsc && yarn link",
+        "login":"npm login --registry http://registry.npmjs.org",
+        "to":"tsc && npm publish --registry http://registry.npmjs.org"
     },
+    "keywords": [
+        "electron",
+        "vue",
+        "React",
+        "Angular",
+        "QucikUI",
+        "Layui",
+        "Avalon",
+        "Dojo",
+        "Ember",
+        "Aurelia",
+        "any",
+        "web",
+        "exe",
+        "jss",
+        "css",
+        "webpack",
+        "build"
+    ],
     "author": "nx",
     "license": "MIT",
     "devDependencies": {
+        "@babel/core": "^7.0.0",
+        "@types/electron-builder": "^2.8.0",
+        "@types/webpack": "^4.41.22",
+        "babel-loader": "^8.1.0",
         "electron-builder": "^22.8.0",
-        "node": "^12.18.3",
-        "ts-node": "^9.0.0",
-        "typescript": "^4.0.2",
-        "webpack": "4.44"
+        "webpack": "^4.44.1"
     }
 }
