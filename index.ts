@@ -54,20 +54,20 @@ export default class {
                         }
                     ],
                 },
-                plugins: [
-                    new webpack.NamedModulesPlugin(),
-                    // new CopyWebpackPlugin({
-                    //     patterns: [
-                    //         // {
-                    //         //   from: env.SRCDIR,
-                    //         //   to: env.OUTDIR('srcOut/web'),
-                    //         //   globOptions: {
-                    //         //     ignore: ['**/*.ts']
-                    //         //   }
-                    //         // },
-                    //     ],
-                    // }),
-                ]
+                // plugins: [
+                //     new webpack.NamedModulesPlugin(),
+                //     // new CopyWebpackPlugin({
+                //     //     patterns: [
+                //     //         // {
+                //     //         //   from: env.SRCDIR,
+                //     //         //   to: env.OUTDIR('srcOut/web'),
+                //     //         //   globOptions: {
+                //     //         //     ignore: ['**/*.ts']
+                //     //         //   }
+                //     //         // },
+                //     //     ],
+                //     // }),
+                // ]
             }],
         }
         ok()
