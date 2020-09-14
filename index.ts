@@ -1,96 +1,127 @@
 import path from 'path'
 import fs from 'fs'
+import rimraf from 'rimraf'
 import webpack from 'webpack'
 import { build } from 'electron-builder'
-interface PackjsonOpt {
-    name?: string,
-    version: string,
-    description?: string,
-    iconFile: string
-}
-export default class {
-    private env: {
-        outPath: string
-        rootPath: string
-        outWebpackPath: string
-        webpackOpts: webpack.Configuration[],
+type TempPath = 'web' | 'electron' | 'outroot'
+let envData: {
+    indexfilePath: string,
+    webpackOpts: webpack.Configuration[],
+    outPath: (op: TempPath) => Promise<string>
+} = {
+    indexfilePath: '',
+    webpackOpts: [],
+    outPath(op) {
+        return new Promise((ok, err) => {
+            const root = path.dirname(envData.indexfilePath);
+            if (envData.indexfilePath === '' || root === '') {
+                return err('indexfilePath undefind');
+            }
+            if (op === 'outroot') {
+                ok(root)
+            } else {
+                ok(path.join(root, op))
+            }
+        })
     }
-    // private clearPath = () => new Promise((ok, err) => rimraf(this.env.outPath, (e) => {
-    //     if (e) {
-    //         err(e)
-    //     } else {
-    //         ok()
-    //     }
-    // })).then(() => fs.promises.mkdir(this.env.outPath))
-    electronMain = (
-        startFile: string
-    ) => new Promise(ok => {
-        const outPath = path.join(path.dirname(startFile), 'outPath')
-        this.env = {
-            outPath,
-            rootPath: path.resolve(__dirname, '../'),
-            outWebpackPath: path.join(outPath, 'webpack'),
-            webpackOpts: [{
-                mode: 'production',
-                target: 'electron-main',
-                entry: startFile,
-                output: {
-                    path: path.join(outPath, 'webpack'),
-                    filename: 'index.js',
-                },
-                module: {
-                    rules: [
-                        {
-                            test: /\.(js|ts)$/,
-                            exclude: /node_modules/,
-                            loader: 'babel-loader',
-                            // options: {
-                            //     presets: ["@babel/preset-typescript"],
-                            //     plugins: [
-                            //         ["@babel/plugin-proposal-class-properties", { "loose": true }],
-                            //     ],
-                            //     cacheDirectory: true,
-                            // },
-                        }
-                    ],
-                },
-                // plugins: [
-                //     new webpack.NamedModulesPlugin(),
-                //     // new CopyWebpackPlugin({
-                //     //     patterns: [
-                //     //         // {
-                //     //         //   from: env.SRCDIR,
-                //     //         //   to: env.OUTDIR('srcOut/web'),
-                //     //         //   globOptions: {
-                //     //         //     ignore: ['**/*.ts']
-                //     //         //   }
-                //     //         // },
-                //     //     ],
-                //     // }),
-                // ]
-            }],
-        }
-        ok()
+}
+
+function clearPath(dirName: TempPath) {
+    return new Promise(async (ok, err) => {
+        const p = await envData.outPath(dirName)
+        rimraf(p, (e) => e ? err(e) : ok())
     })
-    electronPreload = (opt: {
-        preloadFile?: string,
-        rendererFile?: string
-    }) => this.electronPreload
+}
+function webpackRun() {
+    return new Promise((ok, err) => webpack(envData.webpackOpts, (configErr, stats) => {
+        if (configErr) {
+            err('webpack opt error');
+        } else if (stats.hasErrors()) {
+            const e = stats.toJson().errors
+            e.forEach(item => console.log('webpack 构建执行报错 ', item));
+            err('webpack run error ' + e.toString())
+        } else {
+            ok()
+        }
+    }))
+}
+export async function electronInit(indexfilePath: string) {
+    return new Promise(async ok => {
+        envData.indexfilePath = indexfilePath;
+        envData.webpackOpts = [{
+            mode: 'production',
+            target: 'electron-main',
+            entry: indexfilePath,
+            output: {
+                path: await envData.outPath('web'),
+                filename: 'index.js',
+            },
+            module: {
+                rules: [
+                    {
+                        test: /\.(js|ts)$/,
+                        exclude: /node_modules/,
+                        loader: 'babel-loader',
+                        // options: {
+                        //     presets: ["@babel/preset-typescript"],
+                        //     plugins: [
+                        //         ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                        //     ],
+                        //     cacheDirectory: true,
+                        // },
+                    }
+                ],
+            },
+            // plugins: [
+            //     new webpack.NamedModulesPlugin(),
+            //     // new CopyWebpackPlugin({
+            //     //     patterns: [
+            //     //         // {
+            //     //         //   from: env.SRCDIR,
+            //     //         //   to: env.OUTDIR('srcOut/web'),
+            //     //         //   globOptions: {
+            //     //         //     ignore: ['**/*.ts']
+            //     //         //   }
+            //     //         // },
+            //     //     ],
+            //     // }),
+            // ]
+        }]
+        ok({
+            electronPreload,
+            electronRenderer,
+            electronPackRun
+        })
+    })
+}
+function electronPreload(filePath: string) {
+    return new Promise(ok => ok(electronPreload))
+}
 
-    electronRenderer = (opt: {
-        preloadFile?: string,
-        rendererFile?: string
-    }) => this.electronRenderer
+function electronRenderer(filePath: string) {
+    return new Promise(ok => ok(electronRenderer))
+}
 
-    pack = ({
-        name = 'nx',
-        version = '1.0.0',
-        description = 'nx创作，技术咨询13520521413',
-        iconFile
-    }: PackjsonOpt) => fs.promises.mkdir(this.env.outPath)// this.clearPath()
-        .then(() => fs.promises.mkdir(this.env.outWebpackPath))
+async function electronPackRun({
+    name,
+    version,
+    description = 'nx创作，技术咨询13520521413',
+    iconFile,
+    electronBulidOpt,
+}: {
+    name: string,
+    version: string,
+    description: string,
+    iconFile: string,
+    electronBulidOpt:Parameters<typeof build>
+}) {
+    const webPath =await envData.outPath('web');
+    const electronPath =await envData.outPath('electron');
+    return clearPath('outroot')
+        .then(() => fs.promises.mkdir(webPath))
+        .then(() => fs.promises.mkdir(electronPath))
         .then(() => fs.promises.writeFile(
-            path.join(this.env.outWebpackPath, 'package.json'),
+            path.join(webPath, 'package.json'),
             JSON.stringify({
                 "name": name,
                 "version": version,
@@ -99,8 +130,8 @@ export default class {
                 "builder": {
                     icon: iconFile,
                     directories: {
-                        "buildResources": this.env.outWebpackPath,
-                        "output": path.join(this.env.outPath, 'electron')
+                        "buildResources": webPath,
+                        "output": electronPath
                     },
                     remoteBuild: false,
                     // directories: {
@@ -135,16 +166,6 @@ export default class {
                 }
             }))
         )
-        .then(() => new Promise((ok, err) => webpack(this.env.webpackOpts, (configErr, stats) => {
-            if (configErr) {
-                err('webpack opt error');
-            } else if (stats.hasErrors()) {
-                const e = stats.toJson().errors
-                e.forEach(item => console.log('webpack 构建执行报错 ', item));
-                err('webpack run error ' + e.toString())
-            } else {
-                ok()
-            }
-        })))
-    //.then(() => build)
+        .then(() => webpackRun())
+        .then(()=>build(...electronBulidOpt))
 }
