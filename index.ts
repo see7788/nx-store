@@ -1,60 +1,147 @@
 import path from 'path'
 import fs from 'fs'
 import rimraf from 'rimraf'
-import webpack from 'webpack'
-import { build } from 'electron-builder'
-type TempPath = 'web' | 'electron' | 'outroot'
-let envData: {
+import webpack, { Configuration } from 'webpack'
+import {
+    build as electronBuilder,
+    createTargets as electronTargets
+} from 'electron-builder'
+// vue(op: ResolvePublic & {}): Promise<any>
+// React(op: ResolvePublic & {}): Promise<any>
+// Angular(op: ResolvePublic & {}): Promise<any>
+// Avalon(op: ResolvePublic & {}): Promise<any>
+// QucikUI(op: ResolvePublic & {}): Promise<any>
+// Layui(op: ResolvePublic & {}): Promise<any>
+interface EnvFunction {
+    tempDirGet(dirext: 'electron' | 'web'): Promise<string>
+    tempDirclear(pathstr: 'electron' | 'web'): Promise<string>
+    pushWebPackOpt(op: Configuration): Promise<EnvFunction['buildWeb']>
+    buildWeb(op: {
+        name: string,
+        version: string,
+        description: string
+    }): Promise<EnvFunction['buildExe']>
+    buildExe(op: {
+        buildFiles: string,
+        buildIcon: string
+    }): Promise<void>
+}
+interface Env extends EnvFunction {
     indexfilePath: string,
-    webpackOpts: webpack.Configuration[],
-    outPath: (op: TempPath) => Promise<string>
-} = {
+    mainName_ext: 'main.js'
+    webpackOpts: Configuration[],
+}
+const env: Env = {
     indexfilePath: '',
+    mainName_ext: 'main.js',
     webpackOpts: [],
-    outPath(op) {
-        return new Promise((ok, err) => {
-            const root = path.dirname(envData.indexfilePath);
-            if (envData.indexfilePath === '' || root === '') {
-                return err('indexfilePath undefind');
-            }
-            if (op === 'outroot') {
-                ok(root)
-            } else {
-                ok(path.join(root, op))
-            }
+    pushWebPackOpt: (op) => new Promise(ok => {
+        env.webpackOpts.push(op)
+        ok(env.buildWeb)
+    }),
+    tempDirGet: (dirext) => new Promise((ok, err) => {
+        if (env.indexfilePath === '') {
+            return err()
+        }
+        const v = `${path.dirname(env.indexfilePath)}_temp${dirext}`;
+        ok(v)
+    }),
+    tempDirclear: (dirext) => new Promise(async (ok, err) => {
+        const v = await env.tempDirGet(dirext);
+        rimraf(v, e => e ? err(e) : fs.promises.mkdir(v).then(() => ok(v)))
+    }),
+    buildWeb({
+        name,
+        version,
+        description
+    }) {
+        return new Promise(async (ok, err) => {
+            const cwdDir = process.cwd();
+            const webDir = await env.tempDirclear('web')
+            return webpack(env.webpackOpts, async (configErr, stats) => {
+                if (configErr) {
+                    err('webpack opt error');
+                } else if (stats.hasErrors()) {
+                    const e = stats.toJson().errors
+                    e.forEach(item => console.log('webpack 构建执行报错 ', item));
+                    err('webpack run error ' + e.toString())
+                } else {
+                    await fs.promises.copyFile(
+                        path.resolve(cwdDir, 'package.json'),
+                        path.resolve(cwdDir, `package${process.hrtime().toString()}.json`)
+                    )
+                    await fs.promises.writeFile(
+                        path.join(cwdDir, 'package.json'),
+                        JSON.stringify({
+                            "name": name,
+                            "version": version,
+                            "description": description,
+                            "main": `./${webDir.replace(process.cwd(), '')}/${env.mainName_ext}`,
+                            "homepage": "",
+                            "repository": "",
+                            "private": true,
+                            "license": "MIT",
+                            "author": {
+                                "name": "Mr FANG",
+                                "email": "diyya@q.com",
+                                "url": "https://see7788.com"
+                            }
+                        }))
+                    return ok(env.buildExe)
+                }
+            })
         })
-    }
+    },
+    buildExe: ({ buildIcon, buildFiles }) => new Promise(async ok => {
+        const electronDir = await env.tempDirclear('electron')
+        const buildConfig = {
+            "author": { // 联系方式
+                "name": "",
+                "email": "",
+                "url": "",
+            },
+            "files": buildFiles,
+            "icon": buildIcon,
+            "directories": {
+                //   "buildResources": env.tempDirGet('web'),
+                "output": electronDir
+            },
+            "asar": false,
+            "remoteBuild": false,
+            "nsis": {
+                "oneClick": false,
+                "allowElevation": true,
+                "deleteAppDataOnUninstall": false,
+                "allowToChangeInstallationDirectory": true
+            },
+            "win": {
+                "target": [
+                    {
+                        "target": "nsis",
+                        "arch": [
+                            "x64",
+                            "ia32"
+                        ]
+                    }
+                ]
+            }
+        }
+        return electronBuilder({ config: {} })
+    })
+
 }
 
-function clearPath(dirName: TempPath) {
-    return new Promise(async (ok, err) => {
-        const p = await envData.outPath(dirName)
-        rimraf(p, (e) => e ? err(e) : ok())
-    })
-}
-function webpackRun() {
-    return new Promise((ok, err) => webpack(envData.webpackOpts, (configErr, stats) => {
-        if (configErr) {
-            err('webpack opt error');
-        } else if (stats.hasErrors()) {
-            const e = stats.toJson().errors
-            e.forEach(item => console.log('webpack 构建执行报错 ', item));
-            err('webpack run error ' + e.toString())
-        } else {
-            ok()
-        }
-    }))
-}
-export async function electronInit(indexfilePath: string) {
-    return new Promise(async ok => {
-        envData.indexfilePath = indexfilePath;
-        envData.webpackOpts = [{
+export default (indexfilePath: string) => {
+    env.indexfilePath = indexfilePath;
+    return {
+        pushAny: env.pushWebPackOpt,
+        pushElectron: async () => env.pushWebPackOpt({
             mode: 'production',
             target: 'electron-main',
-            entry: indexfilePath,
+            entry: env.indexfilePath,
             output: {
-                path: await envData.outPath('web'),
-                filename: 'index.js',
+                path: await env.tempDirGet('web'),
+                filename: env.mainName_ext,
             },
             module: {
                 rules: [
@@ -72,100 +159,6 @@ export async function electronInit(indexfilePath: string) {
                     }
                 ],
             },
-            // plugins: [
-            //     new webpack.NamedModulesPlugin(),
-            //     // new CopyWebpackPlugin({
-            //     //     patterns: [
-            //     //         // {
-            //     //         //   from: env.SRCDIR,
-            //     //         //   to: env.OUTDIR('srcOut/web'),
-            //     //         //   globOptions: {
-            //     //         //     ignore: ['**/*.ts']
-            //     //         //   }
-            //     //         // },
-            //     //     ],
-            //     // }),
-            // ]
-        }]
-        ok({
-            electronPreload,
-            electronRenderer,
-            electronPackRun
         })
-    })
-}
-function electronPreload(filePath: string) {
-    return new Promise(ok => ok(electronPreload))
-}
-
-function electronRenderer(filePath: string) {
-    return new Promise(ok => ok(electronRenderer))
-}
-
-async function electronPackRun({
-    name,
-    version,
-    description = 'nx创作，技术咨询13520521413',
-    iconFile,
-    electronBulidOpt,
-}: {
-    name: string,
-    version: string,
-    description: string,
-    iconFile: string,
-    electronBulidOpt:Parameters<typeof build>
-}) {
-    const webPath =await envData.outPath('web');
-    const electronPath =await envData.outPath('electron');
-    return clearPath('outroot')
-        .then(() => fs.promises.mkdir(webPath))
-        .then(() => fs.promises.mkdir(electronPath))
-        .then(() => fs.promises.writeFile(
-            path.join(webPath, 'package.json'),
-            JSON.stringify({
-                "name": name,
-                "version": version,
-                "description": description,
-                "main": "./index.js",
-                "builder": {
-                    icon: iconFile,
-                    directories: {
-                        "buildResources": webPath,
-                        "output": electronPath
-                    },
-                    remoteBuild: false,
-                    // directories: {
-                    //     // app: path.join(__dirname, TEMPDIR),
-                    //     buildResources: path.join(__dirname, env.STATICDIR),
-                    //     output: path.join(__dirname, env.PACKDIR),
-                    // },
-                    // mac: {
-                    //     target: ["zip"],
-                    //     icon: ICO('icon.icns'),
-                    // },
-                    // "default" | "zip" | "7z" | "dmg" | "mas" | "mas-dev" | "pkg" |
-                    // "tar.xz" | "tar.lz" | "tar.gz" | "tar.bz2" | "dir" | TargetConfiguration”
-                    win: {
-                        "target": [
-                            {
-                                "target": "nsis",
-                                "arch": ["x64", "ia32"]
-                            }
-                        ],
-                    },
-                    nsis: {
-                        "oneClick": false,
-                        "allowElevation": true,
-                        "deleteAppDataOnUninstall": false,
-                        "allowToChangeInstallationDirectory": true,
-                    },
-                    asar: false,
-                    // afterPack(packer) {
-                    //     console.log(packer);
-                    // }
-                }
-            }))
-        )
-        .then(() => webpackRun())
-        .then(()=>build(...electronBulidOpt))
+    }
 }

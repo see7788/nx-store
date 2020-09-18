@@ -1,5 +1,5 @@
 {
-    "name": "nx_pack",
+    "name": "nx-buildpack",
     "version": "1.0.3",
     "description": "tel13520521413",
     "main": "dist/index.js",
@@ -8,7 +8,10 @@
         "test": "tsc && yarn link",
         "login": "npm login --registry http://registry.npmjs.org",
         "start": "tsc && npm publish --registry http://registry.npmjs.org"
-    },
+   },
+    "files": [
+        "dist/**"
+    ],
     "keywords": [
         "electron",
         "vue",
@@ -30,7 +33,7 @@
     ],
     "author": "nx",
     "license": "MIT",
-    "devDependencies": {
+    "dependencies": {
         "@babel/core": "^7.0.0",
         "@types/rimraf": "^3.0.0",
         "@types/webpack": "^4.41.22",
