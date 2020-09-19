@@ -1,0 +1,27 @@
+{
+  "name": "nx-pack",
+  "version": "1.0.0",
+  "description": "电商辅助",
+  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "Mr FANG",
+    "email": "diyya@q.com",
+    "url": "https://see7788.com"
+  },
+  "main": "index.ts",
+  "devDependencies": {
+    "@types/rimraf": "^3.0.0",
+    "@types/webpack": "^4.41.22",
+    "crypto-js": "^4.0.0",
+    "electron-builder": "^22.8.1",
+    "rimraf": "^3.0.2",
+    "ts-loader": "^8.0.3",
+    "webpack": "^4.44.1"
+  },
+  "dependencies": {
+    "@babel/runtime-corejs3": "^7.11.2"
+  },
+  "homepage": "",
+  "repository": ""
+}

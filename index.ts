@@ -3,162 +3,210 @@ import fs from 'fs'
 import rimraf from 'rimraf'
 import webpack, { Configuration } from 'webpack'
 import {
-    build as electronBuilder,
-    createTargets as electronTargets
+    build as electronbuild, createTargets as electrontype
 } from 'electron-builder'
-// vue(op: ResolvePublic & {}): Promise<any>
-// React(op: ResolvePublic & {}): Promise<any>
-// Angular(op: ResolvePublic & {}): Promise<any>
-// Avalon(op: ResolvePublic & {}): Promise<any>
-// QucikUI(op: ResolvePublic & {}): Promise<any>
-// Layui(op: ResolvePublic & {}): Promise<any>
-interface EnvFunction {
-    tempDirGet(dirext: 'electron' | 'web'): Promise<string>
-    tempDirclear(pathstr: 'electron' | 'web'): Promise<string>
-    pushWebPackOpt(op: Configuration): Promise<EnvFunction['buildWeb']>
-    buildWeb(op: {
+
+interface Env {
+    indexfilePath: string,
+    mainName_ext: 'index.js'
+    webpackOpts: Configuration[],
+    tsconfigOpts: string[],
+
+    outPathGet(dirext: 'electron' | 'web'): Promise<string>
+
+    outPathclear(pathstr: 'electron' | 'web'): Promise<string>
+
+    webPackOptPush(op: Configuration): Promise<Env['configJsonSet']>
+
+    tsconfigPush(allPath: string): Promise<Env['configJsonSet']>
+
+    configJsonSet(op: {
         name: string,
         version: string,
-        description: string
-    }): Promise<EnvFunction['buildExe']>
-    buildExe(op: {
-        buildFiles: string,
-        buildIcon: string
-    }): Promise<void>
+        description: string,
+        homepage?: string,
+        repository?: string
+    }): Promise<Env['webpackRun']>
+
+    webpackRun(): Promise<Env['electronBuilder']>
+
+    electronBuilder(op: {
+        buildFiles: string[],
+        buildIcon: string,
+        builderType: Parameters<typeof electrontype>
+    }): Promise<any>
 }
-interface Env extends EnvFunction {
-    indexfilePath: string,
-    mainName_ext: 'main.js'
-    webpackOpts: Configuration[],
-}
+
 const env: Env = {
     indexfilePath: '',
-    mainName_ext: 'main.js',
-    webpackOpts: [],
-    pushWebPackOpt: (op) => new Promise(ok => {
-        env.webpackOpts.push(op)
-        ok(env.buildWeb)
-    }),
-    tempDirGet: (dirext) => new Promise((ok, err) => {
+    mainName_ext: 'index.js',
+    outPathGet: (dirext) => new Promise((ok, err) => {
         if (env.indexfilePath === '') {
             return err()
         }
         const v = `${path.dirname(env.indexfilePath)}_temp${dirext}`;
         ok(v)
     }),
-    tempDirclear: (dirext) => new Promise(async (ok, err) => {
-        const v = await env.tempDirGet(dirext);
+    outPathclear: (dirext) => new Promise(async (ok, err) => {
+        const v = await env.outPathGet(dirext);
         rimraf(v, e => e ? err(e) : fs.promises.mkdir(v).then(() => ok(v)))
     }),
-    buildWeb({
+    tsconfigOpts: [],
+    webpackOpts: [],
+    webPackOptPush: (allPath) => new Promise(ok => {
+        env.webpackOpts.push(allPath)
+        ok(env.configJsonSet)
+    }),
+    tsconfigPush: (allPath) => new Promise(ok => {
+        env.tsconfigOpts.push(allPath)
+        ok(env.configJsonSet)
+    }),
+    async configJsonSet({
         name,
         version,
-        description
+        description,
+        homepage = '',
+        repository = ''
     }) {
+        // await fs.promises.copyFile(
+        //     packagejsonPath,
+        //     path.resolve(cwdPath, `package${process.hrtime().toString()}.json`)
+        // )
+        const cwdPath = process.cwd();
+        const outDir = await env.outPathclear('web')
+            .then(v => path.basename(v))
+        const packagejson = path.resolve(cwdPath, 'package.json')
+        const tscoinfigjson = path.resolve(cwdPath, 'tsconfig.json')
+        const packsetting = {
+            "name": name,
+            "version": version,
+            "description": description,
+            "main": `./${outDir}/${env.mainName_ext}`,
+            "homepage": homepage,
+            //   "repository": repository,
+            // "private": true,
+            "license": "MIT"
+        }
+        const tsconfig = {
+            "compilerOptions": {
+                "module": "commonjs",
+                //决定如何处理模块。或者是"Node"对于Node.js/io.js，或者是"Classic"（默认）
+                "moduleResolution": "node",
+                // 编译的目标是什么版本的
+                "target": "es6",
+                // 允许编译javascript文件。
+                "allowJs": true,
+                //生成相应的 .map文件
+                "sourceMap": true,
+                // 禁止any类型
+                "noImplicitAny": true,
+                // 生成相应的 .d.ts文件
+                "declaration": true,
+                //处理import * as和import default
+                "esModuleInterop": true,
+                //以严格模式解析并为每个源文件生成 "use strict"语句
+                "alwaysStrict": true,
+                //移除注释
+                "removeComments": true,
+                "outDir": outDir,
+                // "paths": { // 指定模块的路径，和baseUrl有关联，和webpack中resolve.alias配置一样
+                //     "src": [ //指定后可以在文件之直接 import * from 'src';
+                //         "./src"
+                //     ],
+                // },
+            },
+            // 指定一个匹配列表（属于自动指定该路径下的所有ts相关文件）
+            "include": env.tsconfigOpts,
+            // 指定一个排除列表（include的反向操作）
+            "exclude": [
+                `${outDir}/**`,
+                "node_modules/**",
+            ]
+        }
+        return fs.promises.readFile(packagejson)
+            .then((v) => fs.promises.writeFile(
+                packagejson,
+                JSON.stringify(
+                    { ...JSON.parse(v.toString()), ...packsetting },
+                    null,
+                    '\r'
+                )
+            ))
+            .then(() => fs.promises.writeFile(
+                tscoinfigjson,
+                JSON.stringify(tsconfig, null, '\r')
+            ))
+            .then(() => env.webpackRun)
+    },
+    webpackRun() {
         return new Promise(async (ok, err) => {
-            const cwdDir = process.cwd();
-            const webDir = await env.tempDirclear('web')
-            return webpack(env.webpackOpts, async (configErr, stats) => {
+            webpack(env.webpackOpts, async (configErr, stats) => {
                 if (configErr) {
                     err('webpack opt error');
                 } else if (stats.hasErrors()) {
                     const e = stats.toJson().errors
-                    e.forEach(item => console.log('webpack 构建执行报错 ', item));
+                    e.forEach(item => console.log('webpack run error ', item));
                     err('webpack run error ' + e.toString())
                 } else {
-                    await fs.promises.copyFile(
-                        path.resolve(cwdDir, 'package.json'),
-                        path.resolve(cwdDir, `package${process.hrtime().toString()}.json`)
-                    )
-                    await fs.promises.writeFile(
-                        path.join(cwdDir, 'package.json'),
-                        JSON.stringify({
-                            "name": name,
-                            "version": version,
-                            "description": description,
-                            "main": `./${webDir.replace(process.cwd(), '')}/${env.mainName_ext}`,
-                            "homepage": "",
-                            "repository": "",
-                            "private": true,
-                            "license": "MIT",
-                            "author": {
-                                "name": "Mr FANG",
-                                "email": "diyya@q.com",
-                                "url": "https://see7788.com"
-                            }
-                        }))
-                    return ok(env.buildExe)
+                    ok(env.electronBuilder)
                 }
             })
         })
     },
-    buildExe: ({ buildIcon, buildFiles }) => new Promise(async ok => {
-        const electronDir = await env.tempDirclear('electron')
-        const buildConfig = {
-            "author": { // 联系方式
-                "name": "",
-                "email": "",
-                "url": "",
+    electronBuilder: ({
+        buildIcon,
+        buildFiles,
+        builderType
+    }) => env.outPathclear('electron')
+        .then((outpath) => electronbuild({
+            config: {
+                "files": [...buildFiles, path.basename(path.dirname(env.indexfilePath))],
+                "icon": buildIcon,
+                "directories": {
+                    //   "buildResources": env.tempDirGet('web'),
+                    "output": outpath
+                },
+                "asar": false,
+                "remoteBuild": false,
+                "nsis": {
+                    "oneClick": false,
+                    "allowElevation": true,
+                    "deleteAppDataOnUninstall": false,
+                    "allowToChangeInstallationDirectory": true
+                },
+                //  extraResources: '',// 该额外的资源配置
+                //  extraFiles: "",// 该额外的文件配置
             },
-            "files": buildFiles,
-            "icon": buildIcon,
-            "directories": {
-                //   "buildResources": env.tempDirGet('web'),
-                "output": electronDir
-            },
-            "asar": false,
-            "remoteBuild": false,
-            "nsis": {
-                "oneClick": false,
-                "allowElevation": true,
-                "deleteAppDataOnUninstall": false,
-                "allowToChangeInstallationDirectory": true
-            },
-            "win": {
-                "target": [
-                    {
-                        "target": "nsis",
-                        "arch": [
-                            "x64",
-                            "ia32"
-                        ]
-                    }
-                ]
-            }
-        }
-        return electronBuilder({ config: {} })
-    })
-
+            //  targets: electrontype(...builderType)
+        }))
 }
+
 
 export default (indexfilePath: string) => {
     env.indexfilePath = indexfilePath;
     return {
-        pushAny: env.pushWebPackOpt,
-        pushElectron: async () => env.pushWebPackOpt({
+        webpackOpt_any: env.webPackOptPush,
+        webpackOpt_electronMain: async () => env.webPackOptPush({
             mode: 'production',
             target: 'electron-main',
             entry: env.indexfilePath,
             output: {
-                path: await env.tempDirGet('web'),
+                path: await env.outPathGet('web'),
                 filename: env.mainName_ext,
             },
             module: {
                 rules: [
                     {
-                        test: /\.(js|ts)$/,
+                        test: /\.(js|ts|tsx)$/,
                         exclude: /node_modules/,
-                        loader: 'babel-loader',
-                        // options: {
-                        //     presets: ["@babel/preset-typescript"],
-                        //     plugins: [
-                        //         ["@babel/plugin-proposal-class-properties", { "loose": true }],
-                        //     ],
-                        //     cacheDirectory: true,
-                        // },
+                        loader: 'ts-loader'
                     }
                 ],
             },
+            resolve: {
+                // Add `.ts` and `.tsx` as a resolvable extension.
+                extensions: [".ts", ".tsx", ".js"]
+            }
         })
     }
 }
