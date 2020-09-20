@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import rimraf from 'rimraf'
+import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin'
 import webpack, { Configuration } from 'webpack'
 import {
     build as electronbuild, createTargets as electrontype
@@ -220,13 +221,21 @@ export default (indexfilePath: string) => {
                         {
                             test: /\.(js|ts|tsx)$/,
                             use: 'ts-loader',
+                            options:{
+                               // compilerOptions:{} ,
+                                configFile:'../',
+                            }
                         }
                     ],
                 },
-                resolve: {
-                    // Add `.ts` and `.tsx` as a resolvable extension.
-                    extensions: [".ts", ".tsx", ".js"]
-                }
+                // resolve: {
+                //     // Add `.ts` and `.tsx` as a resolvable extension.
+                //     extensions: [".ts", ".tsx", ".js"]
+                // }
+                // resolve: {
+                //     plugins: [new TsconfigPathsPlugin({ configFile: "./path/to/tsconfig.json" })]
+                //     //tsconfig-paths-webpack-plugin
+                //   }
             })
         }
     }

@@ -17,11 +17,10 @@
     "electron-builder": "^22.8.1",
     "rimraf": "^3.0.2",
     "ts-loader": "^8.0.3",
+    "tsconfig-paths-webpack-plugin": "^3.3.0",
     "webpack": "^4.44.1"
   },
-  "dependencies": {
-    "@babel/runtime-corejs3": "^7.11.2"
-  },
+  "dependencies": {},
   "homepage": "",
   "repository": ""
 }
