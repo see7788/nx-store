@@ -5,22 +5,27 @@ import webpack, { Configuration } from 'webpack'
 import {
     build as electronbuild, createTargets as electrontype
 } from 'electron-builder'
-
+// Pick<Configuration, Exclude<keyof Configuration, 'entry'>>
+interface WebpackOpt extends Configuration {
+    entry: string
+}
 interface Env {
     indexfilePath: string,
     mainName_ext: 'index.js'
-    webpackOpts: Configuration[],
-    tsconfigOpts: string[],
 
     outPathGet(dirext: 'electron' | 'web'): Promise<string>
 
     outPathclear(pathstr: 'electron' | 'web'): Promise<string>
 
-    webPackOptPush(op: Configuration): Promise<Env['configJsonSet']>
+    filePaths: string[]
+    dirPaths: string[]
+    webpackOpts: WebpackOpt[],//webpack.module.rules优先级exclude > include > test
 
-    tsconfigPush(allPath: string): Promise<Env['configJsonSet']>
+    webPackPush(op: WebpackOpt): Promise<Env['nodeJsonSet']>
+    filePathPush(...filePaths: string[]): Promise<Env['nodeJsonSet']>
+    dirPathPush(...dirPaths: string[]): Promise<Env['nodeJsonSet']>
 
-    configJsonSet(op: {
+    nodeJsonSet(op: {
         name: string,
         version: string,
         description: string,
@@ -37,8 +42,11 @@ interface Env {
     }): Promise<any>
 }
 
-const env: Env = {
+export const env: Env = {
     indexfilePath: '',
+    webpackOpts: [],
+    filePaths: [],
+    dirPaths: [],
     mainName_ext: 'index.js',
     outPathGet: (dirext) => new Promise((ok, err) => {
         if (env.indexfilePath === '') {
@@ -51,17 +59,20 @@ const env: Env = {
         const v = await env.outPathGet(dirext);
         rimraf(v, e => e ? err(e) : fs.promises.mkdir(v).then(() => ok(v)))
     }),
-    tsconfigOpts: [],
-    webpackOpts: [],
-    webPackOptPush: (allPath) => new Promise(ok => {
-        env.webpackOpts.push(allPath)
-        ok(env.configJsonSet)
+    webPackPush: (op) => env.filePathPush(op.entry).then(() => {
+        env.webpackOpts.push(op)
+        return env.nodeJsonSet
     }),
-    tsconfigPush: (allPath) => new Promise(ok => {
-        env.tsconfigOpts.push(allPath)
-        ok(env.configJsonSet)
+    filePathPush: (...op) => env.dirPathPush(...(op.map(c => path.dirname(c))))
+        .then(() => {
+            env.filePaths = [...env.filePaths, ...op]
+            return env.nodeJsonSet
+        }),
+    dirPathPush: (...op) => new Promise(ok => {
+        env.dirPaths = [...env.dirPaths, ...op]
+        ok(env.nodeJsonSet)
     }),
-    async configJsonSet({
+    async nodeJsonSet({
         name,
         version,
         description,
@@ -116,7 +127,7 @@ const env: Env = {
                 // },
             },
             // 指定一个匹配列表（属于自动指定该路径下的所有ts相关文件）
-            "include": env.tsconfigOpts,
+            "include": env.filePaths.map(v => path.basename(v)),
             // 指定一个排除列表（include的反向操作）
             "exclude": [
                 `${outDir}/**`,
@@ -185,28 +196,38 @@ const env: Env = {
 export default (indexfilePath: string) => {
     env.indexfilePath = indexfilePath;
     return {
-        webpackOpt_any: env.webPackOptPush,
-        webpackOpt_electronMain: async () => env.webPackOptPush({
-            mode: 'production',
-            target: 'electron-main',
-            entry: env.indexfilePath,
-            output: {
-                path: await env.outPathGet('web'),
-                filename: env.mainName_ext,
+        dirPathPush: env.dirPathPush,
+        filePathPush: env.filePathPush,
+        webpackOptPush: {
+            optTpl: {
+                moduleRules: {
+                    js: {},
+                    css: {},
+                    img: {},
+                }
             },
-            module: {
-                rules: [
-                    {
-                        test: /\.(js|ts|tsx)$/,
-                        exclude: /node_modules/,
-                        loader: 'ts-loader'
-                    }
-                ],
-            },
-            resolve: {
-                // Add `.ts` and `.tsx` as a resolvable extension.
-                extensions: [".ts", ".tsx", ".js"]
-            }
-        })
+            any: env.webPackPush,
+            electronMain: async () => env.webPackPush({
+                mode: 'production',
+                target: 'electron-main',
+                entry: indexfilePath,
+                output: {
+                    path: await env.outPathGet('web'),
+                    filename: '[name].js',
+                },
+                module: {
+                    rules: [
+                        {
+                            test: /\.(js|ts|tsx)$/,
+                            use: 'ts-loader',
+                        }
+                    ],
+                },
+                resolve: {
+                    // Add `.ts` and `.tsx` as a resolvable extension.
+                    extensions: [".ts", ".tsx", ".js"]
+                }
+            })
+        }
     }
 }
